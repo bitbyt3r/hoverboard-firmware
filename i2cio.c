@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <linux/i2c-dev.h>
+#include "i2c-dev.h"
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -22,12 +22,9 @@ int i2c_write(unsigned char slave_addr, unsigned char reg_addr, unsigned char le
         return -1;
     }
 
-    unsigned char *fulldata;
-    fulldata = (unsigned char *) malloc(length+1);
-    fulldata[0] = reg_addr;
-    memcpy(&fulldata[1], &data, length+1);
-    if (write(i2c_file, fulldata, length+1) != length+1) {
-        perror("Failed to write to i2c device");
+    int result = i2c_smbus_write_i2c_block_data(i2c_file, reg_addr, length, data);
+    if (result) {
+        printf("Failed to write to i2c device: %d\n", result);
         return -1;
     }
 
@@ -49,13 +46,9 @@ int i2c_read(unsigned char slave_addr, unsigned char reg_addr, unsigned char len
         return -1;
     }
 
-    if (write(i2c_file, &reg_addr, 1) != 1) {
-        perror("Failed to set read address of i2c device");
-        return -1;
-    }
-    
-    if (read(i2c_file, data, length) != length) {
-        perror("Failed to read from i2c device");
+    int result = i2c_smbus_read_i2c_block_data(i2c_file, reg_addr, length, data);
+    if (result != length) {
+        printf("Failed to read from i2c device: %d\n", result);
         return -1;
     }
 

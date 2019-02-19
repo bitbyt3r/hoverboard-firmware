@@ -61,11 +61,11 @@ static inline unsigned short inv_orientation_matrix_to_scalar(
     return scalar;
 }
 
+
 void main() {
     struct int_param_s int_param;
     int result;
-    result = mpu_init(&int_param);
-    printf("Result: %d\n", result);
+    mpu_init(&int_param);
 
     unsigned char accel_fsr;
     unsigned short gyro_rate, gyro_fsr;
@@ -73,15 +73,11 @@ void main() {
     /* Get/set hardware configuration. Start gyro. */
     /* Wake up all sensors. */
     mpu_set_sensors(INV_XYZ_GYRO | INV_XYZ_ACCEL);
-    /* Push both gyro and accel data into the FIFO. */
-    mpu_configure_fifo(INV_XYZ_GYRO | INV_XYZ_ACCEL);
-    mpu_set_sample_rate(DEFAULT_MPU_HZ);
-    /* Read back configuration in case it was set improperly. */
-    mpu_get_sample_rate(&gyro_rate);
-    mpu_get_gyro_fsr(&gyro_fsr);
-    mpu_get_accel_fsr(&accel_fsr);
-    printf("Gyro Rate: %d\n", gyro_rate);
-    printf("Accel fsr: %d\n", accel_fsr);
+
+
+    short data[3];
+    mpu_get_accel_reg(data, NULL);
+    printf("Got accel %d %d %d\n", data[0], data[1], data[2]);
 
     if ((result = dmp_load_motion_driver_firmware()) < 0) {
         printf("Failed to load DMP firmware: %d\n", result);
@@ -92,8 +88,7 @@ void main() {
         exit(-1);
     }
 
-    unsigned short dmp_features = DMP_FEATURE_6X_LP_QUAT | DMP_FEATURE_SEND_RAW_ACCEL | DMP_FEATURE_SEND_CAL_GYRO |
-    DMP_FEATURE_GYRO_CAL;
+    unsigned short dmp_features = DMP_FEATURE_6X_LP_QUAT;
     if (dmp_enable_feature(dmp_features)) {
         printf("Failed to enable DMP Features\n");
         exit(-1);
@@ -125,8 +120,7 @@ void main() {
              * registered). The more parameter is non-zero if there are
              * leftover packets in the FIFO.
              */
-            result = dmp_read_fifo(gyro, accel, quat, &sensor_timestamp, &sensors, &more);
-            printf("Tried to read fifo: %d\n", result);
+            dmp_read_fifo(gyro, accel, quat, &sensor_timestamp, &sensors, &more);
             /* Gyro and accel data are written to the FIFO by the DMP in chip
              * frame and hardware units. This behavior is convenient because it
              * keeps the gyro and accel outputs of dmp_read_fifo and
