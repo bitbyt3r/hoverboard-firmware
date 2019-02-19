@@ -11,7 +11,7 @@
 #include "inv_mpu.h"
 #include "inv_mpu_dmp_motion_driver.h"
 
-#define DEFAULT_MPU_HZ  (25)
+#define DEFAULT_MPU_HZ  (100)
 
 static signed char gyro_orientation[9] = { 0, 0, -1,
                                            0,-1, 0,
@@ -155,9 +155,7 @@ void main() {
                 pitch = asin(sinp);
             }
             // printf("%.2f %.2f %.2f %.2f\n", w, x, y, z);
-            printf("Angle: %f\n", pitch);
-            usleep(100000);
-            set_speed((int)(pitch*100));
+            set_speed((int)(pitch*300));
         }
     }
 }
