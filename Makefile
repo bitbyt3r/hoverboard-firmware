@@ -1,5 +1,5 @@
 hoverboard: hoverboard.o inv_mpu.o inv_mpu_dmp_motion_driver.o i2cio.o
-	gcc hoverboard.o inv_mpu.o inv_mpu_dmp_motion_driver.o i2cio.o -o hoverboard 
+	gcc hoverboard.o inv_mpu.o inv_mpu_dmp_motion_driver.o i2cio.o -o hoverboard -lm
 
 hoverboard.o: hoverboard.c
 	gcc -c hoverboard.c

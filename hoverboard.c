@@ -1,18 +1,21 @@
 #include <errno.h>
+#include <math.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <termios.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "inv_mpu.h"
 #include "inv_mpu_dmp_motion_driver.h"
 
-#define DEFAULT_MPU_HZ  (100)
+#define DEFAULT_MPU_HZ  (25)
 
-static signed char gyro_orientation[9] = {-1, 0, 0,
+static signed char gyro_orientation[9] = { 0, 0, -1,
                                            0,-1, 0,
-                                           0, 0, 1};
+                                           1, 0, 0};
 
 /* These next two functions converts the orientation matrix (see
  * gyro_orientation) to a scalar representation for use by the DMP.
@@ -61,6 +64,12 @@ static inline unsigned short inv_orientation_matrix_to_scalar(
     return scalar;
 }
 
+int serial;
+void set_speed(int speed) {
+    char buffer[50];
+    int length = sprintf(buffer, "v 0 %d\nv 1 %d\n", speed, -1*speed);
+    write(serial, buffer, length);
+}
 
 void main() {
     struct int_param_s int_param;
@@ -73,7 +82,6 @@ void main() {
     /* Get/set hardware configuration. Start gyro. */
     /* Wake up all sensors. */
     mpu_set_sensors(INV_XYZ_GYRO | INV_XYZ_ACCEL);
-
 
     short data[3];
     mpu_get_accel_reg(data, NULL);
@@ -88,7 +96,12 @@ void main() {
         exit(-1);
     }
 
-    unsigned short dmp_features = DMP_FEATURE_6X_LP_QUAT;
+    if (dmp_enable_gyro_cal(1) < 0) {
+        printf("Failed to enable gyro calibration\n");
+        exit(-1);
+    }
+
+    unsigned short dmp_features = DMP_FEATURE_TAP | DMP_FEATURE_6X_LP_QUAT | DMP_FEATURE_SEND_CAL_GYRO;
     if (dmp_enable_feature(dmp_features)) {
         printf("Failed to enable DMP Features\n");
         exit(-1);
@@ -101,40 +114,50 @@ void main() {
         printf("Failed to enable DMP\n");
         exit(-1);
     }
-    sleep(2);
+    
+    if ((serial = open("/dev/ttyO2", O_RDWR | O_SYNC)) < 0) {
+        perror("Failed to open serial port");
+        exit(-1);
+    }
+
+    struct termios tty;
+    memset(&tty, 0, sizeof tty);
+    if (tcgetattr(serial, &tty) != 0) {
+        perror("Failed to acquire termios device");
+        exit(-1);
+    }
+    cfsetospeed(&tty, 115200);
+    cfsetispeed(&tty, 115200);
+    set_speed(0);
 
     while (1) {
-            short gyro[3], accel[3], sensors;
-            unsigned long sensor_timestamp;
-            unsigned char more;
-            long quat[4];
-            /* This function gets new data from the FIFO when the DMP is in
-             * use. The FIFO can contain any combination of gyro, accel,
-             * quaternion, and gesture data. The sensors parameter tells the
-             * caller which data fields were actually populated with new data.
-             * For example, if sensors == (INV_XYZ_GYRO | INV_WXYZ_QUAT), then
-             * the FIFO isn't being filled with accel data.
-             * The driver parses the gesture data to determine if a gesture
-             * event has occurred; on an event, the application will be notified
-             * via a callback (assuming that a callback function was properly
-             * registered). The more parameter is non-zero if there are
-             * leftover packets in the FIFO.
-             */
-            dmp_read_fifo(gyro, accel, quat, &sensor_timestamp, &sensors, &more);
-            /* Gyro and accel data are written to the FIFO by the DMP in chip
-             * frame and hardware units. This behavior is convenient because it
-             * keeps the gyro and accel outputs of dmp_read_fifo and
-             * mpu_read_fifo consistent.
-             */
-            if (sensors & INV_XYZ_GYRO)
-                printf("Got Gyro Reading: %d %d %d\n", gyro[0], gyro[1], gyro[2]);
-            if (sensors & INV_XYZ_ACCEL)
-                printf("Got Accel Reading: %d %d %d\n", accel[0], accel[1], accel[2]);
-            /* Unlike gyro and accel, quaternions are written to the FIFO in
-             * the body frame, q30. The orientation is set by the scalar passed
-             * to dmp_set_orientation during initialization.
-             */
-            if (sensors & INV_WXYZ_QUAT)
-                printf("Get quaternion reading\n");
+        short gyro[3], accel[3], sensors;
+        unsigned long sensor_timestamp;
+        unsigned char more;
+        long quat[4];
+        dmp_read_fifo(gyro, accel, quat, &sensor_timestamp, &sensors, &more);
+        if (sensors & INV_WXYZ_QUAT) {
+            double ws = (double)quat[0] * (double)quat[0];
+            double xs = (double)quat[1] * (double)quat[1];
+            double ys = (double)quat[2] * (double)quat[2];
+            double zs = (double)quat[3] * (double)quat[3];
+            double sum = ws + xs + ys + zs;
+            double magnitude = sqrt(sum);
+            double w = quat[0] / magnitude;
+            double x = quat[1] / magnitude;
+            double y = quat[2] / magnitude;
+            double z = quat[3] / magnitude;
+            double sinp = 2.0 * (w*y-z*x);
+            double pitch;
+            if (fabs(sinp) >= 1) {
+                pitch = 3.1415926 / 2;
+            } else {
+                pitch = asin(sinp);
+            }
+            // printf("%.2f %.2f %.2f %.2f\n", w, x, y, z);
+            printf("Angle: %f\n", pitch);
+            usleep(100000);
+            set_speed((int)(pitch*100));
+        }
     }
 }
