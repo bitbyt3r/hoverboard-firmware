@@ -150,7 +150,7 @@ void main() {
             double sinp = 2.0 * (w*y-z*x);
             double pitch;
             if (fabs(sinp) >= 1) {
-                pitch = copysign(3.1415926 / 2, sinp);
+                pitch = copysign(M_PI / 2, sinp);
             } else {
                 pitch = asin(sinp);
             }
@@ -159,7 +159,12 @@ void main() {
 
             // Rotate frame of reference around x to find lean angle relative to gravity
             double angle = pitch*cos(-1*roll) - yaw*sin(-1*roll);
-            printf("%f\n", angle);
+            if ((fabs(roll) > M_PI / 2) & (fabs(roll) < (3 * M_PI) / 2)){
+                printf("Forward ");
+            } else {
+                printf("Backward ");
+            }
+            printf("%.2f, %.2f, %.2f  %f, %f\n",roll, pitch, yaw, angle, sinp);
             // set_speed((int)(pitch*300));
         }
     }
