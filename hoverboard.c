@@ -13,9 +13,9 @@
 
 #define DEFAULT_MPU_HZ  (100)
 
-static signed char gyro_orientation[9] = { 0, 0, -1,
-                                           0,-1, 0,
-                                           1, 0, 0};
+static signed char gyro_orientation[9] = { 1, 0, 0,
+                                           0, 1, 0,
+                                           0, 0, 1};
 
 /* These next two functions converts the orientation matrix (see
  * gyro_orientation) to a scalar representation for use by the DMP.
@@ -150,12 +150,17 @@ void main() {
             double sinp = 2.0 * (w*y-z*x);
             double pitch;
             if (fabs(sinp) >= 1) {
-                pitch = 3.1415926 / 2;
+                pitch = copysign(3.1415926 / 2, sinp);
             } else {
                 pitch = asin(sinp);
             }
-            // printf("%.2f %.2f %.2f %.2f\n", w, x, y, z);
-            set_speed((int)(pitch*300));
+            double roll = atan2(2.0*(w*x+y*z), 1.0-2.0*(x*x+y*y));
+            double yaw  = atan2(2.0*(w*z+x*y), 1.0-2.0*(y*y+z*z));
+
+            // Rotate frame of reference around x to find lean angle relative to gravity
+            double angle = pitch*cos(-1*roll) - yaw*sin(-1*roll);
+            printf("%f\n", angle);
+            // set_speed((int)(pitch*300));
         }
     }
 }
